@@ -21,11 +21,13 @@ const ATTACH_CONTAINER_ID = "robBugsonAttachLinks";
 const MERGE_CONTAINER_ID = "robBugsonMergeLinks";
 const LIST_CONTAINER_ID = "robBugsonListLinks";
 
+const PR_STATE_CLOSED = "Closed";
 const PR_STATE_MERGED = "Merged";
+const PR_STATE_OPEN = "Open";
 const PR_STATE_UNKNOWN = "Unknown";
 
-const TAB_UNKNOWN = "Unknown";
 const TAB_CONVERSATION = "Conversation";
+const TAB_OTHER = "Other";
 
 
 /**
@@ -33,7 +35,7 @@ const TAB_CONVERSATION = "Conversation";
  */
 function getPRNum() {
     // Get the PR number which is like "#4099"
-    let elem = document.querySelector("h1.gh-header-title span");
+    let elem = document.querySelectorAll('[data-component="PH_Title"] span')[1];
     if (!elem) {
         return;
     }
@@ -47,7 +49,7 @@ function getPRNum() {
  * Retrieve the PR title from the pull request page.
  */
 function getPRTitle() {
-    let elem = document.querySelector("bdi.js-issue-title");
+    let elem = document.querySelector('[data-component="PH_Title"] span.markdown-title');
     if (!elem) {
         return;
     }
@@ -85,16 +87,16 @@ function getRepoInfo() {
  * Retrieve PR state.
  */
 function getPRState() {
-    // See if there"s been a merge
-    let state = document.querySelector(".State.State--merged");
+    let state = document.querySelector('[data-status]');
     if (state === null) {
         return PR_STATE_UNKNOWN;
     }
-    state = state.textContent.trim();
-    if (state == "Merged") {
-        return PR_STATE_MERGED;
+    switch (state.getAttribute('data-status')) {
+        case 'pullMerged': return PR_STATE_MERGED;
+        case 'pullOpened': return PR_STATE_OPEN;
+        case 'pullClosed': return PR_STATE_CLOSED;
+        default: return PR_STATE_UNKNOWN;
     }
-    return PR_STATE_UNKNOWN;
 }
 
 
@@ -102,15 +104,15 @@ function getPRState() {
  * For PRs, get the selected tab.
  */
 function getSelectedTab() {
-    let tab = document.querySelector("a.tabnav-tab.selected");
+    let tab = document.querySelector('[role="tab"][aria-selected="true"]');
     if (!tab) {
-        return TAB_UNKNOWN;
+        return TAB_OTHER;
     }
     let tabText = tab.textContent.trim();
     if (tabText.startsWith("Conversation")) {
         return TAB_CONVERSATION;
     }
-    return TAB_UNKNOWN;
+    return TAB_OTHER;
 }
 
 
@@ -233,7 +235,7 @@ function addAttachLinksToPage(pageKind, repoInfo, prNum, prTitle, prUrl, bugIds)
         // If there"s no link container, then we create a new one
         linkContainer = document.createElement("p");
         linkContainer.id = ATTACH_CONTAINER_ID;
-        linkContainer.className = "subtext";
+        linkContainer.style.cssText = "font-size: 16px;";
     }
 
     // Remove everything from the link container so we don't end up with
@@ -241,8 +243,6 @@ function addAttachLinksToPage(pageKind, repoInfo, prNum, prTitle, prUrl, bugIds)
     while (linkContainer.firstChild) {
         linkContainer.removeChild(linkContainer.firstChild);
     }
-
-    let headerShow = document.querySelector("div.gh-header-show");
 
     // If there are no bug ids, just return
     if (bugIds.length == 0) {
@@ -258,7 +258,8 @@ function addAttachLinksToPage(pageKind, repoInfo, prNum, prTitle, prUrl, bugIds)
         linkContainer.appendChild(bugLink);
     });
 
-    headerShow.appendChild(linkContainer);
+    let headerShow = document.querySelector('[data-component="PH_Navigation"]').parentElement;
+    headerShow.insertAdjacentElement('beforebegin',linkContainer);
 }
 
 
@@ -267,7 +268,7 @@ function createBugsList(bugIds){
     if (bugsListContainer == null) {
         bugsListContainer = document.createElement("p");
         bugsListContainer.id = LIST_CONTAINER_ID;
-        bugsListContainer.className = "subtext";
+        bugsListContainer.style.cssText = "font-size: 16px;";
     }
 
     // Remove everything from container so we don't have duplicates
@@ -310,8 +311,8 @@ function addBugListToPage(pageKind, bugIds) {
         parentElement.insertBefore(createBugsList(bugIds), insertBeforeEl);
 
     } else if (pageKind == "pr") {
-        parentElement = document.querySelector('div.gh-header-show');
-        parentElement.appendChild(createBugsList(bugIds));
+        parentElement = document.querySelector('[data-component="PH_Navigation"]').parentElement;
+        parentElement.insertAdjacentElement('beforebegin', createBugsList(bugIds));
     }
 }
 
@@ -331,7 +332,7 @@ function addMergeLinks(pageKind, repoInfo, prNum, prTitle, prUrl, prState, bugId
         // If there"s no link container, then we create a new one
         linkContainer = document.createElement("p");
         linkContainer.id = MERGE_CONTAINER_ID;
-        linkContainer.className = "subtext";
+        linkContainer.style.cssText = "font-size: 16px;";
     }
 
     // Removes everything from the link container so we don't end up
@@ -380,7 +381,7 @@ function addMergeLinks(pageKind, repoInfo, prNum, prTitle, prUrl, prState, bugId
         }
     });
 
-    let headerShow = document.querySelector("div.gh-header-show");
+    let headerShow = document.querySelector('[data-component="PH_Navigation"]').parentElement;
     let separator = document.createTextNode(", ");
 
     if (author && prNum && commitSha && commitUrl) {
@@ -419,7 +420,7 @@ function addMergeLinks(pageKind, repoInfo, prNum, prTitle, prUrl, prState, bugId
         });
     }
 
-    headerShow.appendChild(linkContainer);
+    headerShow.insertAdjacentElement('beforebegin',linkContainer);
 }
 
 
@@ -511,6 +512,15 @@ module.exports = {
     BUG_BASE_URL,
     getAttachLinks,
     getBugIdsFromPRTitle,
+    getPRNum,
+    getPRState,
+    getPRTitle,
+    getSelectedTab,
     MERGE_CONTAINER_ID,
+    PR_STATE_CLOSED,
     PR_STATE_MERGED,
+    PR_STATE_OPEN,
+    PR_STATE_UNKNOWN,
+    TAB_CONVERSATION,
+    TAB_OTHER,
 }

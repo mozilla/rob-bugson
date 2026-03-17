@@ -4,14 +4,110 @@ const {
     getAttachLinks,
     getBugIdsFromPRTitle,
     MERGE_CONTAINER_ID,
+    PR_STATE_CLOSED,
     PR_STATE_MERGED,
+    PR_STATE_OPEN,
+    PR_STATE_UNKNOWN,
+    TAB_CONVERSATION,
+    TAB_OTHER,
+    getPRNum,
+    getPRTitle,
+    getPRState,
+    getSelectedTab,
 } = require("./github-bugzilla-content");
+
+// Minimal GitHub PR page header HTML matching the current (post-2024) structure,
+// derived from mozilla-services/socorro pull requests.
+const PR_HEADER_HTML = (title, num, status, selectedTab) => `
+    <div>
+        <h1 data-component="PH_Title">
+            <span class="markdown-title">${title}</span><span><span>#${num}</span></span>
+        </h1>
+        <div data-component="PH_Actions"></div>
+        <div>
+            <span data-status="${status}">Merged</span>
+        </div>
+        <div data-component="PH_Navigation">
+            <nav aria-label="Pull request navigation tabs">
+                <div role="tablist">
+                    <a role="tab" aria-selected="${selectedTab === "Conversation"}" href="#">Conversation</a>
+                    <a role="tab" aria-selected="${selectedTab === "Commits"}" href="#">Commits</a>
+                    <a role="tab" aria-selected="${selectedTab === "Files changed"}" href="#">Files changed</a>
+                </div>
+            </nav>
+        </div>
+    </div>
+`;
 
 describe("Content script", () => {
     afterEach(() => {
         // restore spies created with spyOn
         jest.restoreAllMocks();
     });
+
+    describe("getPRNum", () => {
+        it("returns the PR number from the page", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1746636: move PROCESS_TYPES to socorro directory", "7170", "pullMerged", "Conversation");
+            expect(getPRNum()).toBe("7170");
+        });
+
+        it("returns undefined when PH_Title is not present", () => {
+            document.body.innerHTML = "<div></div>";
+            expect(getPRNum()).toBeUndefined();
+        });
+    });
+
+    describe("getPRTitle", () => {
+        it("returns the PR title from the page", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1746636: move PROCESS_TYPES to socorro directory", "7170", "pullMerged", "Conversation");
+            expect(getPRTitle()).toBe("bug-1746636: move PROCESS_TYPES to socorro directory");
+        });
+
+        it("returns undefined when PH_Title is not present", () => {
+            document.body.innerHTML = "<div></div>";
+            expect(getPRTitle()).toBeUndefined();
+        });
+    });
+
+    describe("getPRState", () => {
+        it("returns PR_STATE_MERGED when the PR is merged", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1: fix things", "99", "pullMerged", "Conversation");
+            expect(getPRState()).toBe(PR_STATE_MERGED);
+        });
+
+        it("returns PR_STATE_OPEN when the PR is open", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1: fix things", "99", "pullOpened", "Conversation");
+            expect(getPRState()).toBe(PR_STATE_OPEN);
+        });
+
+        it("returns PR_STATE_CLOSED when the PR is closed", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1: fix things", "99", "pullClosed", "Conversation");
+            expect(getPRState()).toBe(PR_STATE_CLOSED);
+        });
+
+        it("returns PR_STATE_UNKNOWN when the PR is closed", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1: fix things", "99", "randomValue", "Conversation");
+            expect(getPRState()).toBe(PR_STATE_UNKNOWN);
+        });
+    });
+
+    describe("getSelectedTab", () => {
+        it("returns TAB_CONVERSATION when the Conversation tab is selected", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1: fix things", "99", "pullMerged", "Conversation");
+            expect(getSelectedTab()).toBe(TAB_CONVERSATION);
+        });
+
+        it("returns TAB_OTHER when a non-Conversation tab is selected", () => {
+            document.body.innerHTML = PR_HEADER_HTML("bug-1: fix things", "99", "pullMerged", "Commits");
+            expect(getSelectedTab()).toBe(TAB_OTHER);
+        });
+
+        it("returns TAB_OTHER when no tab is selected", () => {
+            document.body.innerHTML = "<div></div>";
+            expect(getSelectedTab()).toBe(TAB_OTHER);
+        });
+    });
+
     describe("getAttachLinks", () => {
         const bugIds = [1];
         const repoInfo = '';
@@ -89,10 +185,7 @@ describe("Content script", () => {
 
             // Mock the HTML structure
             document.body.innerHTML = `
-                <div class="gh-header-show">
-                    <div id="${MERGE_CONTAINER_ID}">
-                    </div>
-                </div>
+                ${PR_HEADER_HTML(prTitle, prNum, "pullMerged", "Conversation")}
                 <div class="TimelineItem">
                     <div class="TimelineItem-body">
                         <a class="author" href="/${author}">${author}</a> merged commit <a href="/mozilla-services/socorro/commit/${fullCommitSha}">${commitSha}</a>into main
@@ -108,13 +201,10 @@ describe("Content script", () => {
 
         it("sends a message to the background script when the merge link is clicked when a PR is merged via a merge queue", () => {
             const sendMessage = jest.spyOn(browser.runtime, "sendMessage").mockResolvedValue({});
-            
+
             // Mock the HTML structure
             document.body.innerHTML = `
-                <div class="gh-header-show">
-                    <div id="${MERGE_CONTAINER_ID}">
-                    </div>
-                </div>
+                ${PR_HEADER_HTML(prTitle, prNum, "pullMerged", "Conversation")}
                 <div class="TimelineItem">
                     <div class="TimelineItem-body">
                         <a class="author" href="/${author}">${author}</a>
