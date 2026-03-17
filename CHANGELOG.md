@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v1.7.3 (March 17th, 2026)
+
+* bug: fix GitHub PR page content extraction (#70)
+
 ## v1.7.2 (September 30th, 2024)
 
 * bug: fix rob-bugson to recognize mergequeue merges. Thank you
